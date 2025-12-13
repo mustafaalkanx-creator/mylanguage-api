@@ -36,6 +36,7 @@ app.get("/words", (req, res) => {
 });
 
 
-app.listen(port, () => {
-  console.log(`API ${port} portunda çalışıyor`);
+app.listen(3000, "0.0.0.0", () => {
+  console.log("Server running on port 3000");
 });
+
