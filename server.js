@@ -1,7 +1,8 @@
-require('dotenv').config();
+//require('dotenv').config();
 const express = require("express");
 const mysql = require("mysql2/promise");
-const { v4: uuidv4 } = require("uuid");
+//const { v4: uuidv4 } = require("uuid");
+const crypto = require('crypto');
 const cors = require("cors");
 const app = express();
 const router = express.Router();
@@ -128,7 +129,7 @@ router.get("/languages", async (req, res) => {
 //yeni visitors için endpoint
 router.post("/visitors/init", async (req, res) => {
   try {
-    const visitorId = uuidv4();
+    const visitorId = crypto.randomUUID();
 
    const sql = `
   INSERT INTO visitors
@@ -291,17 +292,18 @@ router.get("/words/random", async (req, res) => {
   }
 });
 
-// words tablosundan word id ye göre, o kelimenin tüm bilgilerini getirir (is_favorite kontrolü ile)
+// words tablosundan word id ye göre, o kelimenin tüm bilgilerini getirir
 router.get("/words/:id", async (req, res) => {
   const wordId = req.params.id;
-  const { visitor_id } = req.query; // Query string'den visitor_id alıyoruz
+  const { visitor_id } = req.query;
 
   if (!wordId) {
     return sendError(res, "word_id zorunlu", 400);
   }
 
   try {
-    const [rows] = await db.execute(
+    // db.execute yerine db.query kullanarak daha stabil bir sonuç alalım
+    const [rows] = await db.query(
       `
       SELECT 
         w.word_id,
@@ -314,14 +316,13 @@ router.get("/words/:id", async (req, res) => {
       FROM words w
       WHERE w.word_id = ?
       `,
-      [visitor_id || null, wordId] // visitor_id yoksa null göndererek hata almayı engelliyoruz
+      [visitor_id || null, wordId]
     );
 
     if (rows.length === 0) {
       return sendError(res, "Kelime bulunamadı", 404);
     }
 
-    // is_favorite değerini boolean (true/false) formatına çeviriyoruz
     const result = {
       ...rows[0],
       is_favorite: rows[0].is_favorite > 0
@@ -330,7 +331,7 @@ router.get("/words/:id", async (req, res) => {
     return sendSuccess(res, result);
 
   } catch (err) {
-    console.error(err);
+    console.error("SQL Hatası Detayı:", err); // Hatayı loglarda net görmek için
     return sendError(res, "Kelime bilgileri alınamadı");
   }
 });
