@@ -185,6 +185,28 @@ router.post("/visitors/init", async (req, res) => {
       ]);
     }
 
+    const [myLanguages] = await db.execute(
+      `SELECT mylang_id, mylang_code, mylang_name FROM mylanguage ORDER BY mylang_name`
+    );
+
+    const [languages] = await db.execute(
+      `SELECT lang_id, lang_code, lang_name FROM language ORDER BY lang_name`
+    );
+
+    const [categories] = await db.execute(
+      `SELECT category_id, category_name, word_count FROM categories ORDER BY category_name`
+    );
+
+    return sendSuccess(res, {
+      visitor_id: currentVisitorId,
+      preferences,
+      initial_data: {
+        my_languages: myLanguages,
+        languages,
+        categories
+      }
+    });
+
     // 2. Bootstrap Verilerini Toplama (Paralel Sorgular - Promise.all ile hızlandırılabilir)
     // Burada hata olasılığına karşı sorguları sarmalıyoruz
     const [myLanguages] = await db.execute(`SELECT mylang_id, mylang_code, mylang_name FROM mylanguage ORDER BY mylang_name`);
