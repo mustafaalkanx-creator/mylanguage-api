@@ -78,14 +78,18 @@ router.get("/menu-sources", async (req, res) => {
       { id: 'my_words_all', name: 'Tüm Kelimelerim', active: false }
     ];
     
-    if (visitor_id) {
+   if (visitor_id) {
       const [stats] = await db.execute(`
         SELECT 
           COUNT(CASE WHEN lang_id = ? THEN 1 END) as current_count,
           COUNT(*) as total_count
         FROM mywords WHERE visitor_id = ?`, [lang_id, visitor_id]);
-      userLists[0].active = stats[0].current_count > 0;
-      userLists[1].active = stats[0].total_count > 0;
+      
+      // Eğer veritabanından sonuç geldiyse (stats[0] varsa) değerleri ata
+      if (stats && stats[0]) {
+        userLists[0].active = stats[0].current_count > 0;
+        userLists[1].active = stats[0].total_count > 0;
+      }
     }
 //frontend için birleştirilmiş yapı
     return sendSuccess(res, { categories: categories, user_lists: userLists });
@@ -136,58 +140,126 @@ router.get("/words/random", async (req, res) => {
   }
 });
 
-// 5. MYWORDS/TOGGLE (Senin tüm platform/version/country verilerinle beraber!)
+// 5. MYWORDS/TOGGLE (Favori Ekle/Çıkar)
 router.post("/mywords/toggle", async (req, res) => {
   let { visitor_id, word_id, lang_id, app_platform, app_version, country } = req.body;
+
   if (!word_id || !lang_id) return sendError(res, "word_id ve lang_id zorunlu", 400);
+
   try {
+    let isNewUser = false;
+
+    // 1. Eğer Bolt'tan ID gelmemişse, hemen burada oluştur (Güvenlik ağı)
     if (!visitor_id) {
       visitor_id = crypto.randomUUID();
+      isNewUser = true;
       await db.execute(
         `INSERT INTO visitors (visitor_id, app_platform, app_version, country) VALUES (?, ?, ?, ?)`,
-        [visitor_id, app_platform || null, app_version || null, country || null]
+        [visitor_id, app_platform || 'web', app_version || '1.0.0', country || null]
       );
     }
-    const [existing] = await db.execute("SELECT myword_id FROM mywords WHERE visitor_id = ? AND word_id = ?", [visitor_id, word_id]);
+
+    // 2. Bu kelime zaten kullanıcının listesinde var mı?
+    const [existing] = await db.execute(
+      "SELECT myword_id FROM mywords WHERE visitor_id = ? AND word_id = ?", 
+      [visitor_id, word_id]
+    );
+
     if (existing.length > 0) {
+      // Varsa SİL (Toggle mantığı)
       await db.execute("DELETE FROM mywords WHERE visitor_id = ? AND word_id = ?", [visitor_id, word_id]);
-      return sendSuccess(res, { status: "removed", is_favorite: false, visitor_id });
+      return sendSuccess(res, { 
+        status: "removed", 
+        is_favorite: false, 
+        visitor_id, // Bolt'a her zaman ID'yi geri gönderiyoruz
+        is_new_user: isNewUser 
+      });
     } else {
-      await db.execute("INSERT INTO mywords (visitor_id, word_id, lang_id) VALUES (?, ?, ?)", [visitor_id, word_id, lang_id]);
-      return sendSuccess(res, { status: "added", is_favorite: true, visitor_id });
+      // Yoksa EKLE
+      await db.execute(
+        "INSERT INTO mywords (visitor_id, word_id, lang_id) VALUES (?, ?, ?)", 
+        [visitor_id, word_id, lang_id]
+      );
+      return sendSuccess(res, { 
+        status: "added", 
+        is_favorite: true, 
+        visitor_id, 
+        is_new_user: isNewUser 
+      });
     }
   } catch (err) {
-    return sendError(res, "İşlem başarısız.");
+    console.error("TOGGLE ERROR:", err);
+    return sendError(res, "İşlem sırasında bir hata oluştu.");
   }
 });
 
-// 6. MYWORDS (LIST)
+// 6. MYWORDS (LIST) - Güncel Versiyon
 router.get("/mywords/:visitor_id", async (req, res) => {
   const { lang_id } = req.query;
   try {
-    let sql = `SELECT w.* FROM mywords mw INNER JOIN words w ON mw.word_id = w.word_id WHERE mw.visitor_id = ?`;
+    // Sorguya "true AS is_favorite" ekledik, Bolt kartları çizerken "kalp" ikonunu dolu göstersin diye.
+    let sql = `SELECT w.*, true AS is_favorite FROM mywords mw 
+               INNER JOIN words w ON mw.word_id = w.word_id 
+               WHERE mw.visitor_id = ?`;
+    
     const params = [req.params.visitor_id];
+    
     if (lang_id && lang_id !== 'all') {
       sql += " AND mw.lang_id = ?";
       params.push(lang_id);
     }
+    
     sql += " ORDER BY mw.myword_id DESC";
+    
     const [rows] = await db.execute(sql, params);
-    return sendSuccess(res, rows);
+    
+    // Veritabanı bazen 1/0 döner, bunu Bolt'un sevdiği gerçek true/false formatına çevirelim
+    const formattedRows = rows.map(row => ({ ...row, is_favorite: true }));
+    
+    return sendSuccess(res, formattedRows);
   } catch (err) {
+    console.error("MYWORDS LIST ERROR:", err);
     return sendError(res, "Liste yüklenemedi.");
   }
 });
 
 // 7. VISITORS/INIT
+// 7. VISITORS/INIT (Geliştirilmiş ve Bolt Uyumlu Hali)
 router.post("/visitors/init", async (req, res) => {
-  const { visitor_id } = req.body;
-  if (!visitor_id) return sendError(res, "ID gerekli", 400);
+  const { visitor_id } = req.body; // Bolt'un çekmecesinden gelen ID
+
   try {
-    const [rows] = await db.execute("SELECT * FROM visitors WHERE visitor_id = ?", [visitor_id]);
-    if (rows.length === 0) return sendError(res, "Bulunamadı", 404);
-    return sendSuccess(res, rows[0]);
+    // 1. Eğer Bolt bir ID gönderdiyse, veritabanında var mı diye bak
+    if (visitor_id) {
+      const [rows] = await db.execute("SELECT * FROM visitors WHERE visitor_id = ?", [visitor_id]);
+      
+      if (rows.length > 0) {
+        // Kullanıcıyı bulduk! Eski bilgilerini geri gönderiyoruz.
+        return sendSuccess(res, {
+          visitor_id: rows[0].visitor_id,
+          is_new: false,
+          data: rows[0]
+        });
+      }
+    }
+
+    // 2. ID gelmediyse VEYA gönderilen ID veritabanında yoksa (temizlik yapılmışsa)
+    const newID = crypto.randomUUID(); // Yepyeni bir kimlik oluştur
+    
+    await db.execute(
+      "INSERT INTO visitors (visitor_id, app_platform) VALUES (?, ?)",
+      [newID, req.body.app_platform || 'web']
+    );
+
+    // Bolt'a diyoruz ki: "Seni yeni kaydettim, bu ID'yi hafızana al"
+    return sendSuccess(res, {
+      visitor_id: newID,
+      is_new: true,
+      data: { visitor_id: newID }
+    });
+
   } catch (err) {
+    console.error("INIT ERROR:", err);
     return sendError(res, "Sistem başlatılamadı.");
   }
 });
