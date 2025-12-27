@@ -65,11 +65,12 @@ router.get("/menu-sources", async (req, res) => {
   if (!lang_id) return sendError(res, "lang_id zorunlu", 400);
   try {
   //1.grup mevcut dile ait kategoriler gelir.
-    const [categories] = await db.execute(`
-      SELECT DISTINCT c.category_id, c.category_name 
+  const [categories] = await db.execute(`
+      SELECT c.category_id, c.category_name, COUNT(wc.word_id) as word_count
       FROM categories c
       INNER JOIN word_category wc ON c.category_id = wc.category_id
       WHERE wc.lang_id = ? 
+      GROUP BY c.category_id, c.category_name
       ORDER BY c.category_id ASC`, [lang_id]);
 
   //2.grup Kullanıcının kendi listeleri (Favori var mı kontrolü) 
