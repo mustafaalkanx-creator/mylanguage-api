@@ -65,7 +65,7 @@ router.get("/menu-sources", async (req, res) => {
   if (!lang_id) return sendError(res, "lang_id zorunlu", 400);
   try {
   //1.grup mevcut dile ait kategoriler gelir.
-  const [categories] = await db.execute(`
+      const [categories] = await db.execute(`
       SELECT c.category_id, c.category_name, COUNT(wc.word_id) as word_count
       FROM categories c
       INNER JOIN word_category wc ON c.category_id = wc.category_id
@@ -74,12 +74,12 @@ router.get("/menu-sources", async (req, res) => {
       ORDER BY c.category_id ASC`, [lang_id]);
 
   //2.grup Kullanıcının kendi listeleri (Favori var mı kontrolü) 
-    let userLists = [
-      { id: 'my_words_current', name: 'Kelimelerim (Seçili Dil)', active: false },
-      { id: 'my_words_all', name: 'Tüm Kelimelerim', active: false }
+ 	let userLists = [
+      { id: 'my_words_current', name: 'Kelimelerim (Seçili Dil)', active: false, count: 0 },
+      { id: 'my_words_all', name: 'Tüm Kelimelerim', active: false, count: 0 }
     ];
     
-   if (visitor_id) {
+ if (visitor_id) {
       const [stats] = await db.execute(`
         SELECT 
           COUNT(CASE WHEN lang_id = ? THEN 1 END) as current_count,
@@ -87,9 +87,11 @@ router.get("/menu-sources", async (req, res) => {
         FROM mywords WHERE visitor_id = ?`, [lang_id, visitor_id]);
       
       // Eğer veritabanından sonuç geldiyse (stats[0] varsa) değerleri ata
-      if (stats && stats[0]) {
+    	if (stats && stats[0]) {
         userLists[0].active = stats[0].current_count > 0;
+        userLists[0].count = stats[0].current_count;
         userLists[1].active = stats[0].total_count > 0;
+        userLists[1].count = stats[0].total_count;
       }
     }
 //frontend için birleştirilmiş yapı
