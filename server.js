@@ -267,11 +267,11 @@ router.post("/visitors/init", async (req, res) => {
   }
 });
 
-// 8. TRANSLATE ENDPOINT
+// 8. TRANSLATE (DeepL Entegrasyonu)
 router.post("/translate", async (req, res) => {
-  const { text, target_lang, source_lang } = req.body;
+  // Değişken isimlerini senin veritabanı sütun isimlerine göre güncelledik
+  const { text, lang_code, mylang_code } = req.body;
 
-  // Güvenlik Kontrolü: API Key .env dosyasından alınıyor
   const authKey = process.env.DEEPL_AUTH_KEY;
 
   if (!authKey) {
@@ -287,8 +287,8 @@ router.post("/translate", async (req, res) => {
       },
       body: JSON.stringify({
         text: [text],
-        source_lang: source_lang, // Veritabanından gelen EN, TR vb.
-        target_lang: target_lang, // Veritabanından gelen TR, EN-US vb.
+        source_lang: lang_code.toUpperCase(), // Öğrenilen dil (EN gibi)
+        target_lang: mylang_code.toUpperCase() // Ana dil (TR gibi)
       }),
     });
 
