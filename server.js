@@ -267,5 +267,43 @@ router.post("/visitors/init", async (req, res) => {
   }
 });
 
+// 8. TRANSLATE ENDPOINT
+router.post("/translate", async (req, res) => {
+  const { text, target_lang, source_lang } = req.body;
+
+  // Güvenlik Kontrolü: API Key .env dosyasından alınıyor
+  const authKey = process.env.DEEPL_AUTH_KEY;
+
+  if (!authKey) {
+    return sendError(res, "DeepL API anahtarı sunucuda bulunamadı.", 500);
+  }
+
+  try {
+    const response = await fetch("https://api-free.deepl.com/v2/translate", {
+      method: "POST",
+      headers: {
+        "Authorization": `DeepL-Auth-Key ${authKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: [text],
+        source_lang: source_lang, // Veritabanından gelen EN, TR vb.
+        target_lang: target_lang, // Veritabanından gelen TR, EN-US vb.
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.translations && data.translations.length > 0) {
+      return sendSuccess(res, { translatedText: data.translations[0].text });
+    } else {
+      return sendError(res, "DeepL çeviri döndürmedi.", 400);
+    }
+  } catch (err) {
+    console.error("Translate Error:", err);
+    return sendError(res, "Çeviri servisiyle iletişim kurulamadı.");
+  }
+});
+
 app.use('/api/v1', router);
 app.listen(3000, "0.0.0.0", () => console.log("WordApp API running on port 3000!"));
