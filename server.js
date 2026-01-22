@@ -34,6 +34,9 @@ const db = mysql.createPool({
   connectionLimit: 10
 });
 
+// OpenAI Anahtarını tanımla (Coolify'dan gelecek)
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
 //Ana url çalışıyor mu kontrolü
 app.get("/", (req, res) => {
  res.send("API çalışıyor");
@@ -150,6 +153,28 @@ router.get("/word-meaning/:word_id/:main_lang_id", async (req, res) => {
   }
 });
 
+// 7. AI PROXY - Bolt'tan gelen talebi OpenAI'ya iletir
+router.post("/ai-proxy", async (req, res) => {
+  try {
+    // Bolt tarafında hazırladığın model ve mesajlar buraya gelir
+    const aiPayload = req.body; 
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}` // Anahtar burada gizlice ekleniyor
+      },
+      body: JSON.stringify(aiPayload)
+    });
+
+    const data = await response.json();
+    return res.status(response.status).json(data);
+    
+  } catch (err) {
+    return sendError(res, "AI servisine bağlanılamadı.");
+  }
+});
 
 app.use('/api/v1', router);
 app.listen(3000, "0.0.0.0", () => console.log("WordApp API running on port 3000!"));
