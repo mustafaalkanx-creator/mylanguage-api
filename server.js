@@ -176,5 +176,53 @@ router.post("/ai-proxy", async (req, res) => {
   }
 });
 
+// 8. AD SETTINGS - Uygulama açılışında reklam ayarlarını ve ID'lerini gönderir
+router.get("/ad-settings", async (req, res) => {
+  // 1. ADIM: Uygulamadan gelen platform bilgisini al ve temizle
+  // Eğer boş gelirse varsayılan olarak 'android' kabul et
+  const rawPlatform = req.query.platform || 'android';
+  const cleanPlatform = rawPlatform.toLowerCase().trim();
+
+  // 2. ADIM: Platform "zırhı" (Gelen veri ne olursa olsun ios veya android'e eşitle)
+  let platform = 'android';
+  if (cleanPlatform.includes('ios') || cleanPlatform.includes('apple') || cleanPlatform.includes('iphone')) {
+    platform = 'ios';
+  }
+
+  try {
+    // 3. ADIM: Veritabanından sadece o platforma ait reklamları çek
+    const query = `
+      SELECT ad_type, is_active, unit_id, step_count 
+      FROM ad_settings 
+      WHERE platform = ?
+    `;
+    const [rows] = await db.execute(query, [platform]);
+
+    // 4. ADIM: Gelen veriyi parçala (Find metodu ile ilgili reklamı buluyoruz)
+    // Eğer veritabanında o satır yoksa uygulamanın çökmemesi için varsayılan değerler atıyoruz
+    const bannerData = rows.find(r => r.ad_type === 'banner') || { is_active: 0, unit_id: "" };
+    const rewardedData = rows.find(r => r.ad_type === 'rewarded') || { is_active: 0, unit_id: "", step_count: 5 };
+
+    // 5. ADIM: Bolt (Frontend) için tertemiz bir paket hazırla
+    const finalResponse = {
+      banner: {
+        active: Boolean(bannerData.is_active), // 1'i true, 0'ı false yapar
+        id: bannerData.unit_id
+      },
+      rewarded: {
+        active: Boolean(rewardedData.is_active),
+        id: rewardedData.unit_id,
+        step: rewardedData.step_count // Kaç kelimede bir çıkacağı
+      }
+    };
+
+    // 6. ADIM: Senin sendSuccess yardımcı fonksiyonunla yanıtı gönder
+    return sendSuccess(res, finalResponse);
+
+  } catch (err) {
+    console.error("Reklam ayarları hatası:", err);
+    return sendError(res, "Reklam ayarları yüklenirken teknik bir hata oluştu.");
+  }
+});
 app.use('/api/v1', router);
 app.listen(3000, "0.0.0.0", () => console.log("WordApp API running on port 3000!"));
