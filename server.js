@@ -224,5 +224,58 @@ router.get("/ad-settings", async (req, res) => {
     return sendError(res, "Reklam ayarları yüklenirken teknik bir hata oluştu.");
   }
 });
+
+// 9. VERSIONS CHECK - Uygulama açılışında versiyon kontrol yapıyor.  
+router.get("/version-check", async (req, res) => {
+  // 1. ADIM: Gelen verileri al ve temizle
+  const rawPlatform = req.query.platform || 'android';
+  const userVersion = req.query.v || '1.0.0'; // Uygulamanın gönderdiği mevcut versiyon
+  const cleanPlatform = rawPlatform.toLowerCase().trim();
+
+  // 2. ADIM: Platform "zırhı" (Hatalı yazımları ios/android'e sabitler)
+  let platform = 'android';
+  if (cleanPlatform.includes('ios') || cleanPlatform.includes('apple') || cleanPlatform.includes('iphone')) {
+    platform = 'ios';
+  }
+
+  try {
+    // 3. ADIM: Veritabanından platform bilgilerini çek
+    const query = `
+      SELECT current_version, min_version, update_url, is_maintenance 
+      FROM app_versions 
+      WHERE platform = ?
+    `;
+    const [rows] = await db.execute(query, [platform]);
+
+    if (rows.length === 0) {
+      return sendError(res, "Platform configuration not found.", 404);
+    }
+
+    const dbData = rows[0];
+
+    // 4. ADIM: Versiyon Karşılaştırma (Zorunlu Güncelleme Kontrolü)
+    // Eğer kullanıcının versiyonu, veritabanındaki minimum versiyondan küçükse TRUE döner.
+    // Örnek: userVersion "1.0.0" < min_version "1.1.0" => force_update: true
+    const forceUpdate = userVersion < dbData.min_version;
+
+    // 5. ADIM: Yanıt Paketini Hazırla
+    const versionStatus = {
+      is_maintenance: Boolean(dbData.is_maintenance), // Bakım modu açık mı?
+      force_update: forceUpdate,                     // Zorunlu güncelleme var mı?
+      latest_version: dbData.current_version,        // Market'teki en son sürüm ne?
+      update_url: dbData.update_url,                 // Mağaza linki
+      message: dbData.is_maintenance 
+        ? "Şu an bakımdayız, kısa süre sonra tekrar deneyin." 
+        : (forceUpdate ? "Devam etmek için uygulamayı güncellemeniz gerekiyor." : "Sürümünüz güncel.")
+    };
+
+    return sendSuccess(res, versionStatus);
+
+  } catch (err) {
+    console.error("Versiyon kontrol hatası:", err);
+    return sendError(res, "Sunucu versiyon kontrolü yapamadı.");
+  }
+});
+
 app.use('/api/v1', router);
 app.listen(3000, "0.0.0.0", () => console.log("WordApp API running on port 3000!"));
