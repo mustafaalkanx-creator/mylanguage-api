@@ -20,6 +20,30 @@ app.use(express.json());
 app.use(cors());
 app.use(limiter);
 
+// --- GÜVENLİK KİLİDİ BAŞLANGICI ---
+app.use((req, res, next) => {
+  // 1. Tarayıcıdan girdiğinde "API çalışıyor" yazısını görebilmen için muafiyet
+  if (req.path === "/") return next();
+
+  // 2. Gelen isteğin içindeki anahtarı oku
+  const clientKey = req.headers['x-api-key'];
+  
+  // 3. Coolify'dan gelecek olan ana anahtarı al
+  const masterKey = process.env.MOBILE_APP_SECRET;
+
+  // 4. Karşılaştır
+  if (clientKey && clientKey === masterKey) {
+    next(); // Anahtar doğru, geçebilirsin
+  } else {
+    // Anahtar hatalıysa veritabanına ulaşmadan burada durdurur
+    res.status(403).json({ 
+      success: false, 
+      error: { message: "Giriş yasak: Geçersiz API Key" } 
+    });
+  }
+});
+// --- GÜVENLİK KİLİDİ BİTİŞİ ---
+
 //Response Helpers
 const sendSuccess = (res, data, status = 200) => res.status(status).json({ success: true, data });
 const sendError = (res, message, status = 500) => res.status(status).json({ success: false, error: { message } });
@@ -153,30 +177,8 @@ router.get("/word-meaning/:word_id/:main_lang_id", async (req, res) => {
   }
 });
 
-// 7. AI PROXY - Bolt'tan gelen talebi OpenAI'ya iletir
-router.post("/ai-proxy", async (req, res) => {
-  try {
-    // Bolt tarafında hazırladığın model ve mesajlar buraya gelir
-    const aiPayload = req.body; 
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${OPENAI_API_KEY}` // Anahtar burada gizlice ekleniyor
-      },
-      body: JSON.stringify(aiPayload)
-    });
-
-    const data = await response.json();
-    return res.status(response.status).json(data);
-    
-  } catch (err) {
-    return sendError(res, "AI servisine bağlanılamadı.");
-  }
-});
-
-// 8. AD SETTINGS - Uygulama açılışında reklam ayarlarını ve ID'lerini gönderir
+// 7. AD SETTINGS - Uygulama açılışında reklam ayarlarını ve ID'lerini gönderir
 router.get("/ad-settings", async (req, res) => {
   // 1. ADIM: Uygulamadan gelen platform bilgisini al ve temizle
   // Eğer boş gelirse varsayılan olarak 'android' kabul et
@@ -225,7 +227,7 @@ router.get("/ad-settings", async (req, res) => {
   }
 });
 
-// 9. VERSIONS CHECK - Uygulama açılışında versiyon kontrol yapıyor.  
+// 8. VERSIONS CHECK - Uygulama açılışında versiyon kontrol yapıyor.  
 router.get("/version-check", async (req, res) => {
   // 1. ADIM: Gelen verileri al ve temizle
   const rawPlatform = req.query.platform || 'android';
