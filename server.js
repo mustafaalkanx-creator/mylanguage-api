@@ -229,6 +229,8 @@ router.get("/ad-settings", async (req, res) => {
 
 // 8. VERSIONS CHECK - Uygulama açılışında versiyon kontrol yapıyor.  
 router.get("/version-check", async (req, res) => {
+  console.log("=== VERSION CHECK ENDPOINT ÇAĞRILDI ===");
+  console.log("GELEN QUERY:", req.query);
   // 1. ADIM: Gelen verileri al ve temizle
   const rawPlatform = req.query.platform || 'android';
   const userVersion = req.query.v || '1.0.0'; // Uygulamanın gönderdiği mevcut versiyon
