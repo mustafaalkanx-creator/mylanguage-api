@@ -227,20 +227,7 @@ router.get("/ad-settings", async (req, res) => {
   }
 });
 
-// 8. VERSIONS CHECK - Uygulama açılışında versiyon kontrol yapıyor.
-
-// bu kısım tet için eklendi. 
-router.get("/version-check", async (req, res) => {
-  console.log("VERSION CHECK ÇAĞRILDI (MOBILE TEST)");
-
-  return res.json({
-    test: "MOBILE BURAYA GELİYOR MU?",
-    time: new Date().toISOString()
-  });
-
-  // ⛔ aşağısı şimdilik çalışmayacak, bilerek
-
-  
+// 8. VERSIONS CHECK - Uygulama açılışında versiyon kontrol yapıyor.  
 router.get("/version-check", async (req, res) => {
   console.log("=== VERSION CHECK ENDPOINT ÇAĞRILDI ===");
   console.log("GELEN QUERY:", req.query);
