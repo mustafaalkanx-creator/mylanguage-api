@@ -227,59 +227,117 @@ router.get("/ad-settings", async (req, res) => {
   }
 });
 
-// 8. VERSIONS CHECK - Uygulama açılışında versiyon kontrol yapıyor.  
-router.get("/version-check", async (req, res) => {
-  console.log("=== VERSION CHECK ENDPOINT ÇAĞRILDI ===");
-  console.log("GELEN QUERY:", req.query);
-  // 1. ADIM: Gelen verileri al ve temizle
-  const rawPlatform = req.query.platform || 'android';
-  const userVersion = req.query.v || '1.0.0'; // Uygulamanın gönderdiği mevcut versiyon
-  const cleanPlatform = rawPlatform.toLowerCase().trim();
+// ================================
+// VERSION CHECK HELPER
+// Versiyonları doğru şekilde karşılaştırır
+// Örn: 1.10.0 > 1.2.0 (string hatası olmaz)
+// ================================
+function isUpdateRequired(current, minimum) {
+  const currentParts = current.split('.').map(Number);
+  const minimumParts = minimum.split('.').map(Number);
 
-  // 2. ADIM: Platform "zırhı" (Hatalı yazımları ios/android'e sabitler)
-  let platform = 'android';
-  if (cleanPlatform.includes('ios') || cleanPlatform.includes('apple') || cleanPlatform.includes('iphone')) {
-    platform = 'ios';
+  for (let i = 0; i < minimumParts.length; i++) {
+    const cur = currentParts[i] || 0;
+    const min = minimumParts[i];
+
+    // Kullanıcının versiyonu küçükse → güncelleme zorunlu
+    if (cur < min) return true;
+
+    // Büyükse → güncel, devam edebilir
+    if (cur > min) return false;
   }
 
-  try {
-    // 3. ADIM: Veritabanından platform bilgilerini çek
-    const query = `
-      SELECT current_version, min_version, update_url, is_maintenance 
-      FROM app_versions 
-      WHERE platform = ?
-    `;
-    const [rows] = await db.execute(query, [platform]);
+  // Tam eşitse → güncel
+  return false;
+}
 
-    if (rows.length === 0) {
-      return sendError(res, "Platform configuration not found.", 404);
+// ================================
+// VERSION CHECK ENDPOINT
+// Uygulama açılışında çağrılır
+// ================================
+router.get("/version-check", async (req, res) => {
+  console.log("VERSION CHECK ÇAĞRILDI");
+
+  // FRONTEND'DEN GELEN VERİLER
+  // platform: android / ios
+  // v: uygulamanın mevcut versiyonu
+  const rawPlatform = req.query.platform || "android";
+  const userVersion = req.query.v || "0.0.0";
+
+  // PLATFORM TEMİZLEME
+  // Hatalı yazımları da yakalar
+  const cleanPlatform = rawPlatform.toLowerCase();
+  const platform = cleanPlatform.includes("ios") ||
+                   cleanPlatform.includes("iphone") ||
+                   cleanPlatform.includes("apple")
+    ? "ios"
+    : "android";
+
+  try {
+    // VERİTABANINDAN PLATFORM BİLGİLERİNİ ÇEK
+    const [rows] = await db.execute(
+      `
+      SELECT 
+        current_version,
+        min_version,
+        update_url,
+        is_maintenance
+      FROM app_versions
+      WHERE platform = ?
+      LIMIT 1
+      `,
+      [platform]
+    );
+
+    // Eğer platform bulunamazsa
+    if (!rows.length) {
+      return res.status(404).json({
+        error: "Platform configuration not found"
+      });
     }
 
     const dbData = rows[0];
 
-    // 4. ADIM: Versiyon Karşılaştırma (Zorunlu Güncelleme Kontrolü)
-    // Eğer kullanıcının versiyonu, veritabanındaki minimum versiyondan küçükse TRUE döner.
-    // Örnek: userVersion "1.0.0" < min_version "1.1.0" => force_update: true
-    const forceUpdate = userVersion < dbData.min_version;
+    // ZORUNLU GÜNCELLEME KONTROLÜ
+    // Kullanıcı versiyonu < minimum versiyon → true
+    const forceUpdate = isUpdateRequired(
+      userVersion,
+      dbData.min_version
+    );
 
-    // 5. ADIM: Yanıt Paketini Hazırla
-    const versionStatus = {
-      is_maintenance: Boolean(dbData.is_maintenance), // Bakım modu açık mı?
-      force_update: forceUpdate,                     // Zorunlu güncelleme var mı?
-      latest_version: dbData.current_version,        // Market'teki en son sürüm ne?
-      update_url: dbData.update_url,                 // Mağaza linki
-      message: dbData.is_maintenance 
-        ? "Şu an bakımdayız, kısa süre sonra tekrar deneyin." 
-        : (forceUpdate ? "Devam etmek için uygulamayı güncellemeniz gerekiyor." : "Sürümünüz güncel.")
-    };
+    // FRONTEND'E GÖNDERİLECEK CEVAP
+    return res.json({
+      // Bakım modu açık mı?
+      is_maintenance: Boolean(dbData.is_maintenance),
 
-    return sendSuccess(res, versionStatus);
+      // Güncelleme zorunlu mu?
+      force_update: forceUpdate,
+
+      // Market'teki en son sürüm
+      latest_version: dbData.current_version,
+
+      // Güncelleme yapılacak mağaza linki
+      update_url: dbData.update_url,
+
+      // Bilgilendirici mesaj
+      message: dbData.is_maintenance
+        ? "Uygulama şu anda bakımda."
+        : forceUpdate
+        ? "Devam etmek için uygulamayı güncellemeniz gerekiyor."
+        : "Uygulamanız güncel."
+    });
 
   } catch (err) {
-    console.error("Versiyon kontrol hatası:", err);
-    return sendError(res, "Sunucu versiyon kontrolü yapamadı.");
+    console.error("VERSION CHECK HATASI:", err);
+
+    // SUNUCU HATASI
+
+    return res.status(500).json({
+      error: "Version check failed"
+    });
   }
 });
+
 
 app.use('/api/v1', router);
 app.listen(3000, "0.0.0.0", () => console.log("WordApp API running on port 3000!"));
