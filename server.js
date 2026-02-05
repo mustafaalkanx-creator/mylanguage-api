@@ -252,29 +252,29 @@ function isUpdateRequired(current, minimum) {
 }
 
 // ================================
+// ================================
 // VERSION CHECK ENDPOINT
 // Uygulama açılışında çağrılır
+// Frontend { success, data } formatı BEKLER
 // ================================
 router.get("/version-check", async (req, res) => {
   console.log("VERSION CHECK ÇAĞRILDI");
 
-  // FRONTEND'DEN GELEN VERİLER
-  // platform: android / ios
-  // v: uygulamanın mevcut versiyonu
+  // FRONTEND'DEN GELEN PARAMETRELER
   const rawPlatform = req.query.platform || "android";
   const userVersion = req.query.v || "0.0.0";
 
-  // PLATFORM TEMİZLEME
-  // Hatalı yazımları da yakalar
+  // PLATFORM NORMALİZASYONU
   const cleanPlatform = rawPlatform.toLowerCase();
-  const platform = cleanPlatform.includes("ios") ||
-                   cleanPlatform.includes("iphone") ||
-                   cleanPlatform.includes("apple")
-    ? "ios"
-    : "android";
+  const platform =
+    cleanPlatform.includes("ios") ||
+    cleanPlatform.includes("iphone") ||
+    cleanPlatform.includes("apple")
+      ? "ios"
+      : "android";
 
   try {
-    // VERİTABANINDAN PLATFORM BİLGİLERİNİ ÇEK
+    // VERİTABANINDAN PLATFORM BİLGİSİNİ AL
     const [rows] = await db.execute(
       `
       SELECT 
@@ -289,54 +289,62 @@ router.get("/version-check", async (req, res) => {
       [platform]
     );
 
-    // Eğer platform bulunamazsa
+    // PLATFORM YOKSA
     if (!rows.length) {
       return res.status(404).json({
-        error: "Platform configuration not found"
+        success: false,
+        error: {
+          message: "Platform configuration not found"
+        }
       });
     }
 
     const dbData = rows[0];
 
     // ZORUNLU GÜNCELLEME KONTROLÜ
-    // Kullanıcı versiyonu < minimum versiyon → true
     const forceUpdate = isUpdateRequired(
       userVersion,
       dbData.min_version
     );
 
-    // FRONTEND'E GÖNDERİLECEK CEVAP
+    // FRONTEND'İN BEKLEDİĞİ FORMAT
     return res.json({
-      // Bakım modu açık mı?
-      is_maintenance: Boolean(dbData.is_maintenance),
+      success: true,
+      data: {
+        // Bakım modu
+        is_maintenance: Boolean(dbData.is_maintenance),
 
-      // Güncelleme zorunlu mu?
-      force_update: forceUpdate,
+        // Zorunlu güncelleme
+        force_update: forceUpdate,
 
-      // Market'teki en son sürüm
-      latest_version: dbData.current_version,
+        // En son sürüm
+        latest_version: dbData.current_version,
 
-      // Güncelleme yapılacak mağaza linki
-      update_url: dbData.update_url,
+        // Store linki
+        update_url: dbData.update_url || "",
 
-      // Bilgilendirici mesaj
-      message: dbData.is_maintenance
-        ? "Uygulama şu anda bakımda."
-        : forceUpdate
-        ? "Devam etmek için uygulamayı güncellemeniz gerekiyor."
-        : "Uygulamanız güncel."
+        // Gösterilecek mesaj
+        message: dbData.is_maintenance
+          ? "Uygulama şu anda bakımda."
+          : forceUpdate
+          ? "Devam etmek için uygulamayı güncellemeniz gerekiyor."
+          : "Uygulamanız güncel."
+      }
     });
 
   } catch (err) {
     console.error("VERSION CHECK HATASI:", err);
 
-    // SUNUCU HATASI
-
+    // SUNUCU HATASI (FRONTEND UYUMLU)
     return res.status(500).json({
-      error: "Version check failed"
+      success: false,
+      error: {
+        message: "Version check failed"
+      }
     });
   }
 });
+
 
 
 app.use('/api/v1', router);
