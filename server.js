@@ -253,19 +253,18 @@ function isUpdateRequired(current, minimum) {
 
 // ================================
 // ================================
+// ================================
 // VERSION CHECK ENDPOINT
 // Uygulama açılışında çağrılır
-// Frontend { success, data } formatı BEKLER
+// Bolt Frontend { success, data } formatı bekler
 // ================================
 router.get("/version-check", async (req, res) => {
-  console.log("VERSION CHECK ÇAĞRILDI");
-
-  // FRONTEND'DEN GELEN PARAMETRELER
+  // 1. ADIM: Parametreleri Al (Bolt hem 'version' hem de 'v' gönderebilir, ikisini de kontrol ediyoruz)
   const rawPlatform = req.query.platform || "android";
-  const userVersion = req.query.v || "0.0.0";
+  const userVersion = req.query.version || req.query.v || "0.0.0";
 
-  // PLATFORM NORMALİZASYONU
-  const cleanPlatform = rawPlatform.toLowerCase();
+  // 2. ADIM: Platform Normalizasyonu
+  const cleanPlatform = rawPlatform.toLowerCase().trim();
   const platform =
     cleanPlatform.includes("ios") ||
     cleanPlatform.includes("iphone") ||
@@ -274,7 +273,7 @@ router.get("/version-check", async (req, res) => {
       : "android";
 
   try {
-    // VERİTABANINDAN PLATFORM BİLGİSİNİ AL
+    // 3. ADIM: Veritabanından Bilgileri Çek
     const [rows] = await db.execute(
       `
       SELECT 
@@ -289,63 +288,63 @@ router.get("/version-check", async (req, res) => {
       [platform]
     );
 
-    // PLATFORM YOKSA
+    // Platform kaydı yoksa güvenli bir varsayılan dön
     if (!rows.length) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: "Platform configuration not found"
+      return res.json({
+        success: true,
+        data: {
+          is_maintenance: false,
+          force_update: false,
+          latest_version: userVersion,
+          update_url: "",
+          message: ""
         }
       });
     }
 
     const dbData = rows[0];
 
-    // ZORUNLU GÜNCELLEME KONTROLÜ
-    const forceUpdate = isUpdateRequired(
-      userVersion,
-      dbData.min_version
-    );
+    // 4. ADIM: Versiyon Karşılaştırması (Zorunlu Güncelleme Kontrolü)
+    // isUpdateRequired fonksiyonunun kodunun üst kısımlarında tanımlı olduğundan emin ol
+    const forceUpdate = isUpdateRequired(userVersion, dbData.min_version);
 
-    // FRONTEND'İN BEKLEDİĞİ FORMAT
+    // 5. ADIM: Bolt'un Beklediği Tam Format
     return res.json({
       success: true,
       data: {
-        // Bakım modu
+        // Bakım modu (Veritabanında 1 ise true, 0 ise false döner)
         is_maintenance: Boolean(dbData.is_maintenance),
 
-        // Zorunlu güncelleme
+        // Zorunlu güncelleme durumu
         force_update: forceUpdate,
 
-        // En son sürüm
+        // En son sürüm numarası
         latest_version: dbData.current_version,
 
-        // Store linki
+        // Mağaza linki
         update_url: dbData.update_url || "",
 
-        // Gösterilecek mesaj
+        // Kullanıcıya gösterilecek dinamik mesaj
         message: dbData.is_maintenance
-          ? "Uygulama şu anda bakımda."
+          ? "Uygulama şu anda bakımda. Lütfen daha sonra tekrar deneyin."
           : forceUpdate
-          ? "Devam etmek için uygulamayı güncellemeniz gerekiyor."
-          : "Uygulamanız güncel."
+          ? "Yeni bir güncelleme mevcut. Devam etmek için lütfen uygulamayı güncelleyin."
+          : ""
       }
     });
 
   } catch (err) {
     console.error("VERSION CHECK HATASI:", err);
 
-    // SUNUCU HATASI (FRONTEND UYUMLU)
+    // Hata durumunda uygulamanın çökmemesi için en azından boş bir data dön
     return res.status(500).json({
       success: false,
       error: {
-        message: "Version check failed"
+        message: "Versiyon kontrolü sırasında bir sunucu hatası oluştu."
       }
     });
   }
 });
-
-
 
 app.use('/api/v1', router);
 app.listen(3000, "0.0.0.0", () => console.log("WordApp API running on port 3000!"));
