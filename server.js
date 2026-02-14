@@ -319,7 +319,7 @@ router.get("/version-check", async (req, res) => {
         force_update: forceUpdate,
 
         // En son sürüm numarası
-        latest_version: dbData.current_version,
+        latest_version: dbData.min_version,
 
         // Mağaza linki
         update_url: dbData.update_url || "",
