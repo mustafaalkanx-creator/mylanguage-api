@@ -227,6 +227,40 @@ router.get("/ad-settings", async (req, res) => {
   }
 });
 
+// 8. EXPRESSIONS - Kategoriye göre kalıp cümleleri, deyimleri veya günlük ifadeleri getirir
+router.get("/expressions/:category_name", async (req, res) => {
+  const { category_name } = req.params;
+
+  try {
+    // Kategoriye göre filtreleme yapıyoruz
+    const query = `
+      SELECT expressions_id, exp_category, content 
+      FROM expressions 
+      WHERE exp_category = ?
+      ORDER BY expressions_id ASC
+    `;
+
+    const [rows] = await db.execute(query, [category_name]);
+
+    if (rows.length === 0) {
+      return sendError(res, "Bu kategoride henüz veri bulunamadı.", 404);
+    }
+
+    // MariaDB content sütununu string (text) olarak döndürebilir, 
+    // frontend'de uğraşmamak için burada JSON objesine çeviriyoruz.
+    const formattedRows = rows.map(row => ({
+      id: row.expressions_id,
+      category: row.exp_category,
+      content: typeof row.content === 'string' ? JSON.parse(row.content) : row.content
+    }));
+
+    return sendSuccess(res, formattedRows);
+  } catch (err) {
+    console.error("Expressions hatası:", err);
+    return sendError(res, "İfadeler yüklenirken bir hata oluştu.");
+  }
+});
+
 // ================================
 // VERSION CHECK HELPER
 // Versiyonları doğru şekilde karşılaştırır
