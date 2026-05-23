@@ -395,15 +395,16 @@ routerv2.get("/main-languages", async (req, res) => {
   }
 });
 
-// 2. TARGET-LANGUAGES (Sıralama ID'ye göre)
+// 2. TARGET-LANGUAGES V2 (Yeni 'target_langn' Tablosundan Sıralama ID'ye göre)
 routerv2.get("/target-languages", async (req, res) => {
   try {
+    // Sorguyu canlıdaki eski tablo yerine, yeni oluşturduğun 'target_langn' tablosuna yönlendiriyoruz
     const [rows] = await db.execute(
-      "SELECT target_lang_id, target_lang_name FROM target_lang ORDER BY target_lang_id ASC"
+      "SELECT target_lang_id, target_lang_name FROM target_langn ORDER BY target_lang_id ASC"
     );
     return sendSuccess(res, rows);
   } catch (err) {
-    return sendError(res, "Target languages list could not be retrieved.");
+    return sendError(res, "Target languages list could not be retrieved from v2 table.");
   }
 });
 
