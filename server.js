@@ -407,21 +407,21 @@ routerv2.get("/target-languages", async (req, res) => {
   }
 });
 
-// 3. CATEGORIES (Seçilen Dile Göre Filtrelenmiş - Esnek ve Güvenli)
+// 3. CATEGORIES V2 (Yeni 'categoryn' Tablosundan Esnek ve Güvenli Filtreleme)
 routerv2.get("/categories", async (req, res) => {
   try {
-    // Eğer istekte dil id'si yoksa, sistemi patlatmıyoruz, varsayılan olarak 1 (Arapça) kabul ediyoruz
+    // Eğer istekte dil id'si yoksa patlatmıyoruz, varsayılan olarak 1 (Arapça) kabul ediyoruz
     const target_lang_id = req.query.target_lang_id || 1;
 
-    // Sadece o dile ait olan kategorileri getiriyoruz
+    // Sorguyu canlıdaki eski tablo yerine, yeni oluşturduğun 'categoryn' tablosuna atıyoruz
     const [rows] = await db.execute(
-      "SELECT category_id, category_name FROM category WHERE target_lang_id = ? ORDER BY category_id ASC",
+      "SELECT category_id, category_name FROM categoryn WHERE target_lang_id = ? ORDER BY category_id ASC",
       [target_lang_id]
     );
 
     return sendSuccess(res, rows);
   } catch (err) {
-    return sendError(res, "Categories list could not be retrieved.");
+    return sendError(res, "Categories list could not be retrieved from v2 table.");
   }
 });
 
