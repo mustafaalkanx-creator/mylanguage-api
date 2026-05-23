@@ -407,16 +407,11 @@ routerv2.get("/target-languages", async (req, res) => {
   }
 });
 
-// 3. CATEGORIES (Seçilen Hedef Dile Göre Filtrelenmiş) //Güncellendi bu kısım.
+// 3. CATEGORIES (Seçilen Dile Göre Filtrelenmiş - Esnek ve Güvenli)
 routerv2.get("/categories", async (req, res) => {
   try {
-    // Frontend'den gelen target_lang_id değerini alıyoruz (Örn: /categories?target_lang_id=2)
-    const { target_lang_id } = req.query;
-
-    // Eğer kullanıcı bir dil id'si göndermediyse hata dönüyoruz
-    if (!target_lang_id) {
-      return sendError(res, "target_lang_id parametresi zorunludur.");
-    }
+    // Eğer istekte dil id'si yoksa, sistemi patlatmıyoruz, varsayılan olarak 1 (Arapça) kabul ediyoruz
+    const target_lang_id = req.query.target_lang_id || 1;
 
     // Sadece o dile ait olan kategorileri getiriyoruz
     const [rows] = await db.execute(
