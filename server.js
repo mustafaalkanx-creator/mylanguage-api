@@ -380,7 +380,7 @@ router.get("/version-check", async (req, res) => {
   }
 });
 
-//yeni oda
+//YENİ ODAAAAAAAAAAAAAAAAAAAA///////////////////////////////////////////
 const routerv2 = express.Router();
 // yeni endpountler
 // 1. MAIN-LANGUAGES (Sıralama ID'ye göre)
@@ -407,12 +407,23 @@ routerv2.get("/target-languages", async (req, res) => {
   }
 });
 
-// 3. CATEGORIES (Sıralama ID'ye göre)
+// 3. CATEGORIES (Seçilen Hedef Dile Göre Filtrelenmiş) //Güncellendi bu kısım.
 routerv2.get("/categories", async (req, res) => {
   try {
+    // Frontend'den gelen target_lang_id değerini alıyoruz (Örn: /categories?target_lang_id=2)
+    const { target_lang_id } = req.query;
+
+    // Eğer kullanıcı bir dil id'si göndermediyse hata dönüyoruz
+    if (!target_lang_id) {
+      return sendError(res, "target_lang_id parametresi zorunludur.");
+    }
+
+    // Sadece o dile ait olan kategorileri getiriyoruz
     const [rows] = await db.execute(
-      "SELECT category_id, category_name FROM category ORDER BY category_id ASC"
+      "SELECT category_id, category_name FROM category WHERE target_lang_id = ? ORDER BY category_id ASC",
+      [target_lang_id]
     );
+
     return sendSuccess(res, rows);
   } catch (err) {
     return sendError(res, "Categories list could not be retrieved.");
