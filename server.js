@@ -551,7 +551,8 @@ routerv2.get("/ad-settings", async (req, res) => {
   }
 });
 
-// 8. EXPRESSIONS - Kategoriye göre kalıp cümleleri, deyimleri veya günlük ifadeleri getirir
+// 8. EXPRESSIONS - Kategoriye göre kalıp cümleleri, deyimleri veya günlük ifadeleri getirir// bunun yerine aşağıdakini kullanıyoruz //artık. bunu sileceğim diğer kod çalışınca. 
+
 routerv2.get("/expressions/:category_name", async (req, res) => {
   const { category_name } = req.params;
 
@@ -582,6 +583,119 @@ routerv2.get("/expressions/:category_name", async (req, res) => {
   } catch (err) {
     console.error("Expressions hatası:", err);
     return sendError(res, "İfadeler yüklenirken bir hata oluştu.");
+  }
+});
+
+// ==========================================
+// V2 NO-PAGINATION & STRICT VALIDATED ENDPOINTS
+// ==========================================
+
+// 8. PHRASE - Sık Kullanılan Kalıplar Sayfası
+routerv2.get("/phrase/:lang_id", async (req, res) => {
+  const lang_id = Number(req.params.lang_id);
+
+  // KRİTİK İYİLEŞTİRME: Geçersiz veya hatalı ID kontrolü (Silent fallback engellendi)
+  if (!Number.isInteger(lang_id) || lang_id <= 0) {
+    return sendError(res, "Geçersiz dil kimliği (Invalid language id).", 400);
+  }
+
+  try {
+    const query = `
+      SELECT 
+        phrase_id AS id,
+        'phrase' AS type,
+        target_lang_id,
+        phrase,
+        phrase_mean,
+        phrase_using,
+        phrase_sample,
+        phrase_sample_mean
+      FROM phrase
+      WHERE target_lang_id = ?
+      ORDER BY phrase_id ASC
+    `;
+
+    const [rows] = await db.execute(query, [lang_id]);
+
+    if (rows.length === 0) {
+      return sendSuccess(res, []);
+    }
+
+    return sendSuccess(res, rows);
+  } catch (err) {
+    console.error("Phrase v2 hatası:", err);
+    return sendError(res, "Kalıp cümleler yüklenirken bir hata oluştu.");
+  }
+});
+
+// 9. IDIOM - Deyimler & Atasözleri Sayfası
+routerv2.get("/idiom/:lang_id", async (req, res) => {
+  const lang_id = Number(req.params.lang_id);
+
+  if (!Number.isInteger(lang_id) || lang_id <= 0) {
+    return sendError(res, "Geçersiz dil kimliği (Invalid language id).", 400);
+  }
+
+  try {
+    const query = `
+      SELECT 
+        idiom_id AS id,
+        'idiom' AS type,
+        target_lang_id,
+        idiom,
+        idiom_mean,
+        idiom_using
+      FROM idiom
+      WHERE target_lang_id = ?
+      ORDER BY idiom_id ASC
+    `;
+
+    const [rows] = await db.execute(query, [lang_id]);
+
+    if (rows.length === 0) {
+      return sendSuccess(res, []);
+    }
+
+    return sendSuccess(res, rows);
+  } catch (err) {
+    console.error("Idiom v2 hatası:", err);
+    return sendError(res, "Deyimler yüklenirken bir hata oluştu.");
+  }
+});
+
+// 10. SLANG - Günlük İfadeler ve Lehçe Farkları Sayfası
+routerv2.get("/slang/:lang_id", async (req, res) => {
+  const lang_id = Number(req.params.lang_id);
+
+  if (!Number.isInteger(lang_id) || lang_id <= 0) {
+    return sendError(res, "Geçersiz dil kimliği (Invalid language id).", 400);
+  }
+
+  try {
+    const query = `
+      SELECT 
+        slang_id AS id,
+        'slang' AS type,
+        target_lang_id,
+        official,
+        official_mean,
+        slang,
+        slang_mean
+      FROM slang
+      WHERE target_lang_id = ?
+      ORDER BY slang_id ASC
+    `;
+
+    const [rows] = await db.execute(query, [lang_id]);
+
+    if (rows.length === 0) {
+      return sendSuccess(res, []);
+    }
+
+    return sendSuccess(res, rows);
+  } catch (err) {
+    console.error("Slang v2 hatası:", err);
+    return sendError(res, "Günlük ifadeler yüklenirken bir hata oluştu.");
   }
 });
 
