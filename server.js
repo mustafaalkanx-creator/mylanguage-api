@@ -818,6 +818,58 @@ routerv2.get("/version-check", async (req, res) => {
   }
 });
 
+// ==========================================
+// 11. ANNOUNCEMENTS ENDPOINT (V2)
+// Uygulama açılışında dinamik duyuruları çeker.
+// İnternet veya veritabanı hatalarında uygulamanın patlamasını engeller.
+// ==========================================
+routerv2.get("/announcements", async (req, res) => {
+  try {
+    // 1. ADIM: Aktif olan duyuruları öncelik sırasına göre (büyükten küçüğe) çek
+    const query = `
+      SELECT 
+        app_announcements_id AS id,
+        title,
+        text_explain,
+        url_text,
+        url,
+        priority,
+        is_active,
+        is_full_screen
+      FROM app_announcements
+      WHERE is_active = 1
+      ORDER BY priority DESC
+    `;
+
+    const [rows] = await db.execute(query);
+
+    // 2. ADIM: Eğer aktif duyuru yoksa, boş bir dizi dönerek akışın güvenle devam etmesini sağla
+    if (!rows || rows.length === 0) {
+      return sendSuccess(res, []);
+    }
+
+    // 3. ADIM: Gelen verileri frontend'in (Bolt) rahat okuması için normalize et
+    const formattedAnnouncements = rows.map(row => ({
+      id: row.id,
+      title: row.title || "",
+      text_explain: row.text_explain || "",
+      url_text: row.url_text || "",
+      url: row.url || "",
+      priority: Number(row.priority),
+      is_full_screen: row.is_full_screen === 1 // 1 ise true, 0 ise false dönüştür
+    }));
+
+    return sendSuccess(res, formattedAnnouncements);
+
+  } catch (err) {
+    // 4. ADIM: "Zırh Aşaması" - Veritabanı çökse bile console'a hatayı yaz ama 
+    // uygulamayı patlatmamak için boş bir dizi [] ile success: true döndür!
+    console.error("ANNOUNCEMENTS V2 HATASI (Sessizce kurtarıldı):", err);
+    
+    // Bolt bu boş diziyi görünce "aktif duyuru yok" kabul edip direkt Ana Sayfa'yı açacak
+    return sendSuccess(res, []);
+  }
+});
 
 //yeni endpointlerin sonu
 
