@@ -871,6 +871,55 @@ routerv2.get("/announcements", async (req, res) => {
   }
 });
 
+// ==========================================================================
+// 12. OFFLINE WORDS (V2) - Çevrimdışı mod için karışık 50 kelime ve anlamları
+// Kategoriden bağımsız, tüm kelimelerden rastgele (RAND) seçim yapar.
+// ==========================================================================
+routerv2.get("/offline-words/:target_lang_id/:main_lang_id", async (req, res) => {
+  // Parametreleri güvenli bir şekilde al ve sayıya dönüştür
+  const target_lang_id = Number(req.params.target_lang_id);
+  const main_lang_id = Number(req.params.main_lang_id);
+
+  // Girdi Kontrolü (Zırh Aşaması)
+  if (!target_lang_id || !main_lang_id || Number.isNaN(target_lang_id) || Number.isNaN(main_lang_id)) {
+    return sendError(res, "Geçersiz parametreler. Dil ID'leri zorunludur ve sayı olmalıdır.", 400);
+  }
+
+  try {
+    // INNER JOIN kullanarak sadece anlam tablosunda (meaning) karşılığı olan dolu kelimeleri seçiyoruz
+    // ORDER BY RAND() ile tüm kategorileri çorba yapıp tamamen karışık 50 kelime getiriyoruz
+    const query = `
+      SELECT 
+        w.word_id, 
+        w.word, 
+        w.sentence, 
+        w.pronunciation,             
+        m.word_meaning, 
+        m.word_defination,
+        m.sentence_meaning
+      FROM word w
+      INNER JOIN meaning m ON w.word_id = m.word_id
+      WHERE w.target_lang_id = ? AND m.main_lang_id = ?
+      ORDER BY RAND()
+      LIMIT 50
+    `;
+
+    const [rows] = await db.execute(query, [target_lang_id, main_lang_id]);
+
+    // Eğer veritabanında hiç kelime bulunamadıysa patlama, boş dizi dön (Güvenli akış)
+    if (!rows || rows.length === 0) {
+      return sendSuccess(res, [], "Seçilen dillere ait çevrimdışı kelime havuzu boş.");
+    }
+
+    // Bolt Frontend formatına uygun tertemiz başarı yanıtı gönder
+    return sendSuccess(res, rows);
+
+  } catch (err) {
+    console.error("OFFLINE WORDS V2 SUNUCU HATASI:", err);
+    return sendError(res, "Çevrimdışı kelime listesi oluşturulurken sunucu hatası oluştu.");
+  }
+});
+
 //yeni endpointlerin sonu
 
 app.use('/api/v1', router);
