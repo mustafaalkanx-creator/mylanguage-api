@@ -452,7 +452,7 @@ routerv2.post("/word-stream", async (req, res) => {
     // word, sentence ve pronunciation alanlarından veri yoksa NULL döner, 
     // uygulama (frontend) kısmında bu NULL kontrolünü yapmalısın.
     const query = `
-      SELECT word_id, target_lang_id, category_id, word, sentence, pronunciation 
+      SELECT word_id, target_lang_id, category_id, word, sentence, pronunciation, pronunciation_text
       FROM word 
       WHERE target_lang_id = ? AND category_id = ? 
       ORDER BY RAND() 
